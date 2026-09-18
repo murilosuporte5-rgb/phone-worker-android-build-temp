@@ -14,10 +14,26 @@ class BridgeAccessibilityService : AccessibilityService() {
         @Volatile var instance: BridgeAccessibilityService? = null
     }
 
-    override fun onServiceConnected() { instance = this }
-    override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
+    override fun onServiceConnected() {
+        instance = this
+        currentPackage()?.let {
+            FocusSessionManager.onPackageChanged(applicationContext, it)
+        }
+    }
+
+    override fun onDestroy() {
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
+
     override fun onInterrupt() {}
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        val pkg = event?.packageName?.toString()?.trim().orEmpty()
+        if (pkg.isNotBlank()) {
+            FocusSessionManager.onPackageChanged(applicationContext, pkg, event?.eventTime ?: System.currentTimeMillis())
+        }
+    }
 
     fun currentPackage(): String? = rootInActiveWindow?.packageName?.toString()
 
