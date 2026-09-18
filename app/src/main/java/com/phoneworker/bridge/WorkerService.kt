@@ -51,6 +51,11 @@ class WorkerService : Service() {
         mainHandler.post(heartbeat)
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!stopped && socket == null) connect()
+        return START_STICKY
+    }
+
     private fun connect() {
         if (stopped) return
 
