@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "Phone Worker V1.1\nProjeto independente do JARVIS."
+            text = "Phone Worker V1.2\nProjeto independente do JARVIS.\nModo PROTOCOLO 3% disponível."
             textSize = 20f
         })
 
@@ -72,6 +72,13 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "Abrir Acessibilidade"
             setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        })
+
+        root.addView(Button(this).apply {
+            text = "Abrir acesso de uso (PROTOCOLO 3%)"
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            }
         })
 
         root.addView(Button(this).apply {
