@@ -31,3 +31,24 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.11.0")
     implementation("com.squareup.okhttp3:okhttp:5.1.0")
 }
+
+
+val generateAppIcon = tasks.register("generateAppIcon") {
+    val encoded = layout.projectDirectory.file("app_icon.b64")
+    val output = layout.projectDirectory.file("src/main/res/drawable-nodpi/app_icon.jpg")
+
+    inputs.file(encoded)
+    outputs.file(output)
+
+    doLast {
+        val bytes = java.util.Base64.getDecoder().decode(encoded.asFile.readText().trim())
+        output.asFile.parentFile.mkdirs()
+        output.asFile.writeBytes(bytes)
+    }
+}
+
+tasks.configureEach {
+    if (name == "preBuild") {
+        dependsOn(generateAppIcon)
+    }
+}
