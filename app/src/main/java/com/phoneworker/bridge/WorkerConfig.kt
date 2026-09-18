@@ -7,6 +7,7 @@ object WorkerConfig {
     private const val KEY_RELAY = "relay_url"
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_DEVICE_TOKEN = "device_token"
+    private const val KEY_AUTO_START = "auto_start"
 
     private const val DEFAULT_RELAY = "ws://127.0.0.1:8787/ws/device"
     private const val DEFAULT_DEVICE_ID = "phone-01"
@@ -22,6 +23,13 @@ object WorkerConfig {
 
     fun deviceToken(context: Context): String =
         prefs(context).getString(KEY_DEVICE_TOKEN, "")?.trim().orEmpty()
+
+    fun autoStart(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_START, false)
+
+    fun setAutoStart(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_AUTO_START, enabled).apply()
+    }
 
     fun save(context: Context, relayUrl: String, deviceId: String, deviceToken: String) {
         prefs(context).edit()
