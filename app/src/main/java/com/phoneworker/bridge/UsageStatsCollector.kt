@@ -45,7 +45,8 @@ object UsageStatsCollector {
 
         data class Acc(
             var foregroundMs: Long = 0,
-            var launchCount: Int = 0,
+            var foregroundEntryCount: Int = 0,
+            var resumeEventCount: Int = 0,
             var firstUseAt: Long? = null,
             var lastUseAt: Long? = null,
             var activeSince: Long? = null
@@ -55,6 +56,7 @@ object UsageStatsCollector {
         var screenInteractive = false
         var screenSince: Long? = null
         var screenInteractiveMs = 0L
+        var lastForegroundPackage: String? = null
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
@@ -74,6 +76,7 @@ object UsageStatsCollector {
                     }
                     screenInteractive = false
                     screenSince = null
+                    lastForegroundPackage = null
                     continue
                 }
             }
@@ -86,11 +89,17 @@ object UsageStatsCollector {
             val acc = apps.getOrPut(pkg) { Acc() }
             if (resume) {
                 if (t >= startMs) {
-                    acc.launchCount += 1
+                    acc.resumeEventCount += 1
+                    if (lastForegroundPackage != pkg) {
+                        acc.foregroundEntryCount += 1
+                        lastForegroundPackage = pkg
+                    }
                     acc.firstUseAt = acc.firstUseAt?.let { minOf(it, t) } ?: t
                     acc.lastUseAt = acc.lastUseAt?.let { maxOf(it, t) } ?: t
                 }
-                acc.activeSince = max(t, startMs)
+                if (acc.activeSince == null) {
+                    acc.activeSince = max(t, startMs)
+                }
             } else {
                 val since = acc.activeSince
                 if (since != null && t >= startMs) {
@@ -115,7 +124,7 @@ object UsageStatsCollector {
 
         val pm = context.packageManager
         val rows = apps.entries
-            .filter { it.value.foregroundMs > 0L || it.value.launchCount > 0 }
+            .filter { it.value.foregroundMs > 0L || it.value.foregroundEntryCount > 0 || it.value.resumeEventCount > 0 }
             .sortedByDescending { it.value.foregroundMs }
             .take(topN.coerceIn(1, 100))
 
@@ -132,7 +141,9 @@ object UsageStatsCollector {
                     .put("package_name", pkg)
                     .put("app_label", label)
                     .put("foreground_seconds", (acc.foregroundMs / 1000L).toInt())
-                    .put("launch_count", acc.launchCount)
+                    .put("foreground_entry_count", acc.foregroundEntryCount)
+                    .put("resume_event_count", acc.resumeEventCount)
+                    .put("launch_count", acc.foregroundEntryCount)
                     .put("first_use_at", acc.firstUseAt?.let { Instant.ofEpochMilli(it).toString() })
                     .put("last_use_at", acc.lastUseAt?.let { Instant.ofEpochMilli(it).toString() })
             )
@@ -145,6 +156,8 @@ object UsageStatsCollector {
             .put("collection_end", Instant.ofEpochMilli(endMs).toString())
             .put("total_screen_seconds", (screenInteractiveMs / 1000L).toInt())
             .put("top_n", topN.coerceIn(1, 100))
+            .put("entry_count_semantics", "foreground_package_transitions_not_cold_launches")
+            .put("resume_event_count_semantics", "raw_activity_resumed_events_can_include_internal_activity_transitions")
             .put("apps", arr)
     }
 
