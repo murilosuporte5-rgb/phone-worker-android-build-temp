@@ -31,6 +31,11 @@ object FocusSessionManager {
             .putString("current_package", initialPackage)
             .putLong("current_since_ms", now)
             .putString("durations_json", "{}")
+            .putString(
+                "entries_json",
+                if (initialPackage.isNullOrBlank()) "{}"
+                else JSONObject().put(initialPackage, 1).toString()
+            )
             .apply()
 
         return status(context)
@@ -46,12 +51,16 @@ object FocusSessionManager {
         if (current == packageName) return
 
         val durations = loadDurations(p.getString("durations_json", "{}"))
+        val entries = loadDurations(p.getString("entries_json", "{}"))
         if (!current.isNullOrBlank()) {
             durations.put(current, durations.optLong(current, 0L) + (atMs - since).coerceAtLeast(0L))
         }
 
+        entries.put(packageName, entries.optLong(packageName, 0L) + 1L)
+
         p.edit()
             .putString("durations_json", durations.toString())
+            .putString("entries_json", entries.toString())
             .putString("current_package", packageName)
             .putLong("current_since_ms", atMs)
             .putInt("app_switches", p.getInt("app_switches", 0) + if (current.isNullOrBlank()) 0 else 1)
@@ -69,6 +78,7 @@ object FocusSessionManager {
         val current = p.getString("current_package", null)
         val since = p.getLong("current_since_ms", now)
         val durations = loadDurations(p.getString("durations_json", "{}"))
+        val entries = loadDurations(p.getString("entries_json", "{}"))
 
         if (!current.isNullOrBlank()) {
             durations.put(current, durations.optLong(current, 0L) + (now - since).coerceAtLeast(0L))
@@ -83,7 +93,8 @@ object FocusSessionManager {
             now = now,
             appSwitches = p.getInt("app_switches", 0),
             currentPackage = current,
-            durations = durations
+            durations = durations,
+            entries = entries
         )
     }
 
@@ -98,6 +109,7 @@ object FocusSessionManager {
         val current = p.getString("current_package", null)
         val since = p.getLong("current_since_ms", now)
         val durations = loadDurations(p.getString("durations_json", "{}"))
+        val entries = loadDurations(p.getString("entries_json", "{}"))
 
         if (!current.isNullOrBlank()) {
             durations.put(current, durations.optLong(current, 0L) + (now - since).coerceAtLeast(0L))
@@ -112,7 +124,8 @@ object FocusSessionManager {
             now = now,
             appSwitches = p.getInt("app_switches", 0),
             currentPackage = current,
-            durations = durations
+            durations = durations,
+            entries = entries
         ).put("stopped", true)
 
         appendHistory(context, result)
@@ -149,7 +162,8 @@ object FocusSessionManager {
         now: Long,
         appSwitches: Int,
         currentPackage: String?,
-        durations: JSONObject
+        durations: JSONObject,
+        entries: JSONObject
     ): JSONObject {
         val rows = mutableListOf<Pair<String, Long>>()
         val keys = durations.keys()
@@ -165,6 +179,7 @@ object FocusSessionManager {
                 JSONObject()
                     .put("package_name", pkg)
                     .put("seconds", (ms / 1000L).toInt())
+                    .put("entries", entries.optInt(pkg, 0))
             )
         }
 
