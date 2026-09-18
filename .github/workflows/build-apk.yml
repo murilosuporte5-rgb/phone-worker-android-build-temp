@@ -56,9 +56,18 @@ jobs:
             echo "SIGNED_BUILD=false" >> "$GITHUB_ENV"
           fi
 
+      - name: Write build metadata
+        run: |
+          {
+            echo "commit=$GITHUB_SHA"
+            echo "stable_signed=$SIGNED_BUILD"
+            echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            keytool -printcert -jarfile staged/phone-worker.apk 2>/dev/null | grep -E "SHA256:|Owner:" || true
+          } > staged/build-info.txt
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: phone-worker-apk
-          path: staged/phone-worker.apk
+          path: staged/
           if-no-files-found: error
