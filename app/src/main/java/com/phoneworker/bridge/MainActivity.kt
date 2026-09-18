@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "Phone Worker V1.3\nProjeto independente do JARVIS.\nModo PROTOCOLO 3% disponível."
+            text = "Phone Worker V1.4\nProjeto independente do JARVIS.\nModo PROTOCOLO 3% disponível."
             textSize = 20f
         })
 
