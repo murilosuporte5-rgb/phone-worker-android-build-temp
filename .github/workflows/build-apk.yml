@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PW_SIGNING_KEYSTORE_B64: ${{ secrets.PW_SIGNING_KEYSTORE_B64 }}
+      PW_SIGNING_STORE_TYPE: ${{ secrets.PW_SIGNING_STORE_TYPE }}
       PW_SIGNING_STORE_PASSWORD: ${{ secrets.PW_SIGNING_STORE_PASSWORD }}
       PW_SIGNING_KEY_ALIAS: ${{ secrets.PW_SIGNING_KEY_ALIAS }}
       PW_SIGNING_KEY_PASSWORD: ${{ secrets.PW_SIGNING_KEY_PASSWORD }}
