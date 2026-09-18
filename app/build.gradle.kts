@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -41,7 +43,7 @@ val generateAppIcon = tasks.register("generateAppIcon") {
     outputs.file(output)
 
     doLast {
-        val bytes = java.util.Base64.getDecoder().decode(encoded.asFile.readText().trim())
+        val bytes = Base64.getDecoder().decode(encoded.asFile.readText().trim())
         output.asFile.parentFile.mkdirs()
         output.asFile.writeBytes(bytes)
     }
