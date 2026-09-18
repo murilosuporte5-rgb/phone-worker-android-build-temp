@@ -126,6 +126,12 @@ class WorkerService : Service() {
                     args.optInt("top_n", 25)
                 )
 
+                "usage_history" -> UsageStatsCollector.collectHistory(
+                    this,
+                    args.optInt("days", 90),
+                    args.optInt("top_n", 30)
+                )
+
                 "focus_start" -> FocusSessionManager.start(
                     this,
                     args.optString("label").takeIf { it.isNotBlank() },
