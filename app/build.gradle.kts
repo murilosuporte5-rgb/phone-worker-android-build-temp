@@ -9,6 +9,7 @@ val signingStoreFile = System.getenv("PW_SIGNING_STORE_FILE")
 val signingStorePassword = System.getenv("PW_SIGNING_STORE_PASSWORD")
 val signingKeyAlias = System.getenv("PW_SIGNING_KEY_ALIAS")
 val signingKeyPassword = System.getenv("PW_SIGNING_KEY_PASSWORD")
+val signingStoreType = System.getenv("PW_SIGNING_STORE_TYPE") ?: "JKS"
 val signingReady = listOf(
     signingStoreFile,
     signingStorePassword,
@@ -33,6 +34,7 @@ android {
             create("stableRelease") {
                 storeFile = file(signingStoreFile!!)
                 storePassword = signingStorePassword
+                storeType = signingStoreType
                 keyAlias = signingKeyAlias
                 keyPassword = signingKeyPassword
             }
