@@ -8,6 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PW_SIGNING_KEYSTORE_B64: ${{ secrets.PW_SIGNING_KEYSTORE_B64 }}
+      PW_SIGNING_STORE_PASSWORD: ${{ secrets.PW_SIGNING_STORE_PASSWORD }}
+      PW_SIGNING_KEY_ALIAS: ${{ secrets.PW_SIGNING_KEY_ALIAS }}
+      PW_SIGNING_KEY_PASSWORD: ${{ secrets.PW_SIGNING_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -24,12 +29,36 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Build debug APK
+      - name: Prepare stable signing key
+        if: ${{ env.PW_SIGNING_KEYSTORE_B64 != '' }}
+        run: |
+          echo "$PW_SIGNING_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/phone-worker-release.jks"
+          chmod 600 "$RUNNER_TEMP/phone-worker-release.jks"
+
+      - name: Build signed release APK
+        if: ${{ env.PW_SIGNING_KEYSTORE_B64 != '' }}
+        env:
+          PW_SIGNING_STORE_FILE: ${{ runner.temp }}/phone-worker-release.jks
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Build debug APK fallback
+        if: ${{ env.PW_SIGNING_KEYSTORE_B64 == '' }}
         run: gradle :app:assembleDebug --stacktrace
+
+      - name: Stage APK
+        run: |
+          mkdir -p staged
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk staged/phone-worker.apk
+            echo "SIGNED_BUILD=true" >> "$GITHUB_ENV"
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk staged/phone-worker.apk
+            echo "SIGNED_BUILD=false" >> "$GITHUB_ENV"
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: phone-worker-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: phone-worker-apk
+          path: staged/phone-worker.apk
           if-no-files-found: error
