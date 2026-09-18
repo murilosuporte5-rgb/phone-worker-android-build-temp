@@ -120,12 +120,46 @@ class WorkerService : Service() {
                 "back" -> JSONObject().put("accepted", service?.back() ?: false)
                 "home" -> JSONObject().put("accepted", service?.home() ?: false)
                 "open_app" -> openApp(args.getString("package"))
+
+                "usage_today" -> UsageStatsCollector.collectToday(
+                    this,
+                    args.optInt("top_n", 25)
+                )
+
+                "focus_start" -> FocusSessionManager.start(
+                    this,
+                    args.optString("label").takeIf { it.isNotBlank() },
+                    service?.currentPackage()
+                )
+
+                "focus_status" -> FocusSessionManager.status(this)
+
+                "focus_stop" -> FocusSessionManager.stop(this)
+
+                "focus_history" -> FocusSessionManager.history(
+                    this,
+                    args.optInt("limit", 20)
+                )
+
+                "protocol3_snapshot" -> protocol3Snapshot(args)
+
                 else -> throw IllegalArgumentException("unsupported_action:$action")
             }
             result(commandId, true, data, null)
         } catch (e: Exception) {
             result(commandId, false, null, e.message ?: e.javaClass.simpleName)
         }
+    }
+
+    private fun protocol3Snapshot(args: JSONObject): JSONObject {
+        return JSONObject()
+            .put("captured_at_ms", System.currentTimeMillis())
+            .put("state", state())
+            .put("focus", FocusSessionManager.status(this))
+            .put("usage_today", UsageStatsCollector.collectToday(
+                this,
+                args.optInt("top_n", 20)
+            ))
     }
 
     private fun openApp(packageName: String): JSONObject {
@@ -140,9 +174,12 @@ class WorkerService : Service() {
         val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         return JSONObject()
             .put("device_id", WorkerConfig.deviceId(this))
+            .put("android_device_id", UsageStatsCollector.androidDeviceId(this))
             .put("battery_pct", bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY))
             .put("foreground_package", BridgeAccessibilityService.instance?.currentPackage())
             .put("accessibility_active", BridgeAccessibilityService.instance != null)
+            .put("usage_access", UsageStatsCollector.hasAccess(this))
+            .put("focus_active", FocusSessionManager.isActive(this))
     }
 
     private fun result(commandId: String, ok: Boolean, data: Any?, error: String?) {
