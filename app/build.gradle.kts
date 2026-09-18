@@ -5,6 +5,17 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val signingStoreFile = System.getenv("PW_SIGNING_STORE_FILE")
+val signingStorePassword = System.getenv("PW_SIGNING_STORE_PASSWORD")
+val signingKeyAlias = System.getenv("PW_SIGNING_KEY_ALIAS")
+val signingKeyPassword = System.getenv("PW_SIGNING_KEY_PASSWORD")
+val signingReady = listOf(
+    signingStoreFile,
+    signingStorePassword,
+    signingKeyAlias,
+    signingKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.phoneworker.bridge"
     compileSdk = 36
@@ -13,8 +24,28 @@ android {
         applicationId = "com.phoneworker.bridge"
         minSdk = 30
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
+    }
+
+    signingConfigs {
+        if (signingReady) {
+            create("stableRelease") {
+                storeFile = file(signingStoreFile!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (signingReady) {
+                signingConfig = signingConfigs.getByName("stableRelease")
+            }
+        }
     }
 
     compileOptions {
