@@ -164,74 +164,175 @@ object UsageStatsCollector {
         val endMs = System.currentTimeMillis()
         val manager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
-        data class AppAcc(
-            var foregroundMs: Long = 0,
-            var lastTimeUsed: Long = 0
+        val daily = collectIntervalHistory(
+            context = context,
+            manager = manager,
+            intervalType = UsageStatsManager.INTERVAL_DAILY,
+            intervalName = "daily",
+            startMs = startMs,
+            endMs = endMs,
+            topN = safeTopN
         )
 
-        data class DayAcc(
+        val weekly = collectIntervalHistory(
+            context = context,
+            manager = manager,
+            intervalType = UsageStatsManager.INTERVAL_WEEKLY,
+            intervalName = "weekly",
+            startMs = startMs,
+            endMs = endMs,
+            topN = safeTopN
+        )
+
+        val monthly = collectIntervalHistory(
+            context = context,
+            manager = manager,
+            intervalType = UsageStatsManager.INTERVAL_MONTHLY,
+            intervalName = "monthly",
+            startMs = startMs,
+            endMs = endMs,
+            topN = safeTopN
+        )
+
+        return JSONObject()
+            .put("available", true)
+            .put("source", "android_usage_stats_aggregated")
+            .put("requested_days", safeDays)
+            .put("top_n_per_period", safeTopN)
+            .put("requested_start_date", startDate.toString())
+            .put("requested_end_date", today.toString())
+            .put("requested_start", Instant.ofEpochMilli(startMs).toString())
+            .put("requested_end", Instant.ofEpochMilli(endMs).toString())
+            .put(
+                "resolutions",
+                JSONObject()
+                    .put("daily", daily)
+                    .put("weekly", weekly)
+                    .put("monthly", monthly)
+            )
+            .put("days", daily.optJSONArray("periods") ?: JSONArray())
+            .put("days_with_any_data", daily.optInt("periods_with_any_data", 0))
+            .put("earliest_available_date", daily.optString("earliest_period_date", null))
+            .put("latest_available_date", daily.optString("latest_period_date", null))
+            .put("exact_launch_counts_available", false)
+            .put("exact_event_timeline_available", false)
+            .put(
+                "note",
+                "Android keeps different retention windows for daily, weekly and monthly UsageStats. Use daily for recent detail, weekly for medium-term history and monthly for older trend recovery. Do not add totals across resolutions because the same usage is represented more than once."
+            )
+    }
+
+    private fun collectIntervalHistory(
+        context: Context,
+        manager: UsageStatsManager,
+        intervalType: Int,
+        intervalName: String,
+        startMs: Long,
+        endMs: Long,
+        topN: Int
+    ): JSONObject {
+        val zone = ZoneId.systemDefault()
+
+        data class AppAcc(
+            var foregroundMs: Long = 0L,
+            var lastTimeUsed: Long = 0L
+        )
+
+        data class PeriodAcc(
+            var startMs: Long,
+            var endMs: Long,
             var screenInteractiveMs: Long? = null,
             val apps: MutableMap<String, AppAcc> = mutableMapOf()
         )
 
-        val byDay = linkedMapOf<LocalDate, DayAcc>()
-        for (offset in 0 until safeDays) {
-            byDay[startDate.plusDays(offset.toLong())] = DayAcc()
-        }
+        val periods = linkedMapOf<Long, PeriodAcc>()
 
         val usageRows = manager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
+            intervalType,
             startMs,
             endMs
         ) ?: emptyList()
 
         for (row in usageRows) {
-            val day = Instant.ofEpochMilli(row.firstTimeStamp).atZone(zone).toLocalDate()
-            val dayAcc = byDay[day] ?: continue
+            val periodStart = row.firstTimeStamp
+            if (periodStart <= 0L) continue
+
+            val periodEnd = maxOf(row.lastTimeStamp, periodStart)
+            val period = periods.getOrPut(periodStart) {
+                PeriodAcc(
+                    startMs = periodStart,
+                    endMs = periodEnd
+                )
+            }
+            period.endMs = maxOf(period.endMs, periodEnd)
+
             if (row.totalTimeInForeground <= 0L && row.lastTimeUsed <= 0L) continue
 
             val pkg = row.packageName ?: continue
-            val app = dayAcc.apps.getOrPut(pkg) { AppAcc() }
+            val app = period.apps.getOrPut(pkg) { AppAcc() }
             app.foregroundMs += row.totalTimeInForeground.coerceAtLeast(0L)
             app.lastTimeUsed = maxOf(app.lastTimeUsed, row.lastTimeUsed)
         }
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             val eventStats = manager.queryEventStats(
-                UsageStatsManager.INTERVAL_DAILY,
+                intervalType,
                 startMs,
                 endMs
             ) ?: emptyList()
 
             for (row in eventStats) {
                 if (row.eventType != UsageEvents.Event.SCREEN_INTERACTIVE) continue
-                val day = Instant.ofEpochMilli(row.firstTimeStamp).atZone(zone).toLocalDate()
-                val dayAcc = byDay[day] ?: continue
-                val current = dayAcc.screenInteractiveMs ?: 0L
-                dayAcc.screenInteractiveMs = current + row.totalTime.coerceAtLeast(0L)
+
+                val periodStart = row.firstTimeStamp
+                if (periodStart <= 0L) continue
+
+                val periodEnd = maxOf(row.lastTimeStamp, periodStart)
+                val period = periods.getOrPut(periodStart) {
+                    PeriodAcc(
+                        startMs = periodStart,
+                        endMs = periodEnd
+                    )
+                }
+                period.endMs = maxOf(period.endMs, periodEnd)
+                period.screenInteractiveMs =
+                    (period.screenInteractiveMs ?: 0L) + row.totalTime.coerceAtLeast(0L)
             }
         }
 
         val pm = context.packageManager
-        val daysArray = JSONArray()
-        var daysWithAnyData = 0
-        var earliestAvailableDate: String? = null
-        var latestAvailableDate: String? = null
+        val arr = JSONArray()
+        var periodsWithAnyData = 0
+        var earliestPeriodDate: String? = null
+        var latestPeriodDate: String? = null
 
-        for ((day, acc) in byDay) {
-            val sortedApps = acc.apps.entries
+        val sortedPeriods = periods.values.sortedBy { it.startMs }
+
+        for (period in sortedPeriods) {
+            val sortedApps = period.apps.entries
                 .filter { it.value.foregroundMs > 0L }
                 .sortedByDescending { it.value.foregroundMs }
 
-            val hasData = sortedApps.isNotEmpty() || acc.screenInteractiveMs != null
-            if (hasData) {
-                daysWithAnyData += 1
-                if (earliestAvailableDate == null) earliestAvailableDate = day.toString()
-                latestAvailableDate = day.toString()
-            }
+            val hasData = sortedApps.isNotEmpty() || period.screenInteractiveMs != null
+            if (!hasData) continue
+
+            periodsWithAnyData += 1
+
+            val startDate = Instant.ofEpochMilli(period.startMs)
+                .atZone(zone)
+                .toLocalDate()
+                .toString()
+
+            val endDate = Instant.ofEpochMilli(period.endMs)
+                .atZone(zone)
+                .toLocalDate()
+                .toString()
+
+            if (earliestPeriodDate == null) earliestPeriodDate = startDate
+            latestPeriodDate = endDate
 
             val appsArray = JSONArray()
-            for ((pkg, app) in sortedApps.take(safeTopN)) {
+            for ((pkg, app) in sortedApps.take(topN)) {
                 val label = try {
                     val info = pm.getApplicationInfo(pkg, 0)
                     pm.getApplicationLabel(info).toString()
@@ -246,40 +347,39 @@ object UsageStatsCollector {
                         .put("foreground_seconds", (app.foregroundMs / 1000L).toInt())
                         .put(
                             "last_time_used",
-                            if (app.lastTimeUsed > 0L) Instant.ofEpochMilli(app.lastTimeUsed).toString() else JSONObject.NULL
+                            if (app.lastTimeUsed > 0L) {
+                                Instant.ofEpochMilli(app.lastTimeUsed).toString()
+                            } else {
+                                JSONObject.NULL
+                            }
                         )
                 )
             }
 
-            daysArray.put(
+            arr.put(
                 JSONObject()
-                    .put("date", day.toString())
-                    .put("has_data", hasData)
+                    .put("period_start", Instant.ofEpochMilli(period.startMs).toString())
+                    .put("period_end", Instant.ofEpochMilli(period.endMs).toString())
+                    .put("start_date", startDate)
+                    .put("end_date", endDate)
+                    .put("has_data", true)
+                    .put("starts_before_requested_window", period.startMs < startMs)
+                    .put("ends_after_requested_window", period.endMs > endMs)
                     .put(
                         "screen_total_seconds",
-                        acc.screenInteractiveMs?.let { (it / 1000L).toInt() } ?: JSONObject.NULL
+                        period.screenInteractiveMs?.let { (it / 1000L).toInt() }
+                            ?: JSONObject.NULL
                     )
                     .put("apps", appsArray)
             )
         }
 
         return JSONObject()
-            .put("available", true)
-            .put("source", "android_usage_stats_aggregated")
-            .put("requested_days", safeDays)
-            .put("top_n_per_day", safeTopN)
-            .put("requested_start_date", startDate.toString())
-            .put("requested_end_date", today.toString())
-            .put("days_with_any_data", daysWithAnyData)
-            .put("earliest_available_date", earliestAvailableDate)
-            .put("latest_available_date", latestAvailableDate)
-            .put("exact_launch_counts_available", false)
-            .put("exact_event_timeline_available", false)
-            .put(
-                "note",
-                "Historical UsageStats are aggregated by Android. Exact activity-resume events are only retained for a few days, so older launch counts and exact interruption timelines are not reconstructed."
-            )
-            .put("days", daysArray)
+            .put("interval", intervalName)
+            .put("periods_with_any_data", periodsWithAnyData)
+            .put("earliest_period_date", earliestPeriodDate)
+            .put("latest_period_date", latestPeriodDate)
+            .put("periods", arr)
     }
 
 }
