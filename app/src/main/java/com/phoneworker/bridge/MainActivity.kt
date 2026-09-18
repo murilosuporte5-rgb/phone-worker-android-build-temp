@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "Phone Worker V1.4\nProjeto independente do JARVIS.\nModo PROTOCOLO 3% disponível."
+            text = "Phone Worker V1.5\nProjeto independente do JARVIS.\nModo PROTOCOLO 3% disponível."
             textSize = 20f
         })
 
@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
             text = "Iniciar Worker"
             setOnClickListener {
                 if (!saveConfig()) return@setOnClickListener
+                WorkerConfig.setAutoStart(this@MainActivity, true)
                 ContextCompat.startForegroundService(
                     this@MainActivity,
                     Intent(this@MainActivity, WorkerService::class.java)
@@ -95,8 +96,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "PARAR / KILL SWITCH"
             setOnClickListener {
+                WorkerConfig.setAutoStart(this@MainActivity, false)
                 stopService(Intent(this@MainActivity, WorkerService::class.java))
-                Toast.makeText(this@MainActivity, "Worker parado.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Worker parado e auto-start desativado.", Toast.LENGTH_SHORT).show()
             }
         })
 
