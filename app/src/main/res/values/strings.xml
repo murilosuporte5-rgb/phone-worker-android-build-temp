@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Phone Worker</string>
+    <string name="accessibility_service_description">Permite controlar este aparelho durante uma sessão explicitamente iniciada pelo usuário.</string>
+</resources>
