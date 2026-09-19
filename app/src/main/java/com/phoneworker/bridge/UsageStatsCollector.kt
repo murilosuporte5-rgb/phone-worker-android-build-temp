@@ -27,7 +27,10 @@ object UsageStatsCollector {
     fun androidDeviceId(context: Context): String? =
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
 
-    fun collectToday(context: Context, topN: Int = 25): JSONObject {
+    fun collectToday(context: Context, topN: Int = 25): JSONObject =
+        collectDay(context, null, topN)
+
+    fun collectDay(context: Context, dateKey: String?, topN: Int = 25): JSONObject {
         if (!hasAccess(context)) {
             return JSONObject()
                 .put("available", false)
@@ -36,8 +39,29 @@ object UsageStatsCollector {
 
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
-        val startMs = today.atStartOfDay(zone).toInstant().toEpochMilli()
-        val endMs = System.currentTimeMillis()
+        val date = try {
+            if (dateKey.isNullOrBlank()) today else LocalDate.parse(dateKey)
+        } catch (_: Exception) {
+            return JSONObject()
+                .put("available", false)
+                .put("reason", "invalid_local_date")
+        }
+
+        if (date.isAfter(today)) {
+            return JSONObject()
+                .put("available", false)
+                .put("reason", "future_local_date")
+                .put("local_date", date.toString())
+                .put("timezone", zone.id)
+        }
+
+        val startMs = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val periodEndMs = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val nowMs = System.currentTimeMillis()
+        val endMs = minOf(nowMs, periodEndMs)
+        val periodMs = (periodEndMs - startMs).coerceAtLeast(1L)
+        val observedMs = (endMs - startMs).coerceIn(0L, periodMs)
+        val periodComplete = nowMs >= periodEndMs
 
         val manager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val events = manager.queryEvents(max(0L, startMs - 86_400_000L), endMs)
@@ -151,9 +175,16 @@ object UsageStatsCollector {
 
         return JSONObject()
             .put("available", true)
-            .put("usage_date", today.toString())
+            .put("usage_date", date.toString())
+            .put("local_date", date.toString())
+            .put("timezone", zone.id)
+            .put("period_start", Instant.ofEpochMilli(startMs).toString())
+            .put("period_end", Instant.ofEpochMilli(periodEndMs).toString())
             .put("collection_start", Instant.ofEpochMilli(startMs).toString())
             .put("collection_end", Instant.ofEpochMilli(endMs).toString())
+            .put("coverage_ratio", observedMs.toDouble() / periodMs.toDouble())
+            .put("coverage_semantics", "fraction_of_local_calendar_day_elapsed_or_finalized")
+            .put("period_complete", periodComplete)
             .put("total_screen_seconds", (screenInteractiveMs / 1000L).toInt())
             .put("top_n", topN.coerceIn(1, 100))
             .put("entry_count_semantics", "foreground_package_transitions_not_cold_launches")
