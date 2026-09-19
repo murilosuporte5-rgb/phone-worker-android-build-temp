@@ -131,6 +131,18 @@ class WorkerService : Service() {
                     args.optInt("top_n", 25)
                 )
 
+                "usage_day" -> UsageStatsCollector.collectDay(
+                    this,
+                    args.optString("local_date").takeIf { it.isNotBlank() },
+                    args.optInt("top_n", 40)
+                )
+
+                "foreground_events" -> ForegroundEventRecorder.history(
+                    this,
+                    args.optString("local_date").takeIf { it.isNotBlank() },
+                    args.optInt("limit", 10000)
+                )
+
                 "usage_history" -> UsageStatsCollector.collectHistory(
                     this,
                     args.optInt("days", 90),
