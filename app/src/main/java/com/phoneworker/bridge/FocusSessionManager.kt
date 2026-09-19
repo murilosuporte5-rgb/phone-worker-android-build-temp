@@ -28,6 +28,7 @@ object FocusSessionManager {
             .putString("label", label?.trim()?.take(120))
             .putLong("started_at_ms", now)
             .putInt("app_switches", 0)
+            .putString("initial_package", initialPackage)
             .putString("current_package", initialPackage)
             .putLong("current_since_ms", now)
             .putString("durations_json", "{}")
@@ -92,6 +93,7 @@ object FocusSessionManager {
             endedAt = null,
             now = now,
             appSwitches = p.getInt("app_switches", 0),
+            initialPackage = p.getString("initial_package", null),
             currentPackage = current,
             durations = durations,
             entries = entries
@@ -123,6 +125,7 @@ object FocusSessionManager {
             endedAt = now,
             now = now,
             appSwitches = p.getInt("app_switches", 0),
+            initialPackage = p.getString("initial_package", null),
             currentPackage = current,
             durations = durations,
             entries = entries
@@ -161,6 +164,7 @@ object FocusSessionManager {
         endedAt: Long?,
         now: Long,
         appSwitches: Int,
+        initialPackage: String?,
         currentPackage: String?,
         durations: JSONObject,
         entries: JSONObject
@@ -191,6 +195,7 @@ object FocusSessionManager {
             .put("ended_at", endedAt?.let { Instant.ofEpochMilli(it).toString() })
             .put("elapsed_seconds", ((now - startedAt).coerceAtLeast(0L) / 1000L).toInt())
             .put("app_switches", appSwitches)
+            .put("initial_package", initialPackage)
             .put("current_package", currentPackage)
             .put("package_time", packages)
     }
