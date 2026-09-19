@@ -17,6 +17,7 @@ class BridgeAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         currentPackage()?.let {
+            ForegroundEventRecorder.recordTransition(applicationContext, it)
             FocusSessionManager.onPackageChanged(applicationContext, it)
         }
     }
@@ -31,7 +32,9 @@ class BridgeAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString()?.trim().orEmpty()
         if (pkg.isNotBlank()) {
-            FocusSessionManager.onPackageChanged(applicationContext, pkg, event?.eventTime ?: System.currentTimeMillis())
+            val atMs = event?.eventTime ?: System.currentTimeMillis()
+            ForegroundEventRecorder.recordTransition(applicationContext, pkg, atMs)
+            FocusSessionManager.onPackageChanged(applicationContext, pkg, atMs)
         }
     }
 
